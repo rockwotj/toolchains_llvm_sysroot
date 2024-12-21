@@ -122,64 +122,10 @@ FROM glibc AS glibc_pruned
 WORKDIR /var/buildlibs/glibc
 RUN rm -rf etc/ sbin/ var/ usr/bin/ usr/libexec/ usr/sbin/ usr/share/
 
-FROM build_image AS gcc
-COPY --from=gcc_download /downloads/gcc /build/gcc
-WORKDIR /build/gcc/build
-COPY --from=kernel /var/buildlibs/kernel /var/builds/sysroot
-COPY --from=glibc /var/buildlibs/glibc /var/builds/sysroot
-RUN --mount=source=configure.sh,target=/usr/bin/configure.sh IS_GCC_BUILD=1 configure.sh \
-        --enable-default-pie \
-        --enable-languages=c,c++,fortran \
-        --disable-multilib \
-        --prefix=/var/buildlibs/gcc \
-        --enable-libstdcxx-threads \
-        --with-build-sysroot=/var/builds/sysroot \
-        --with-sysroot=/var/builds/sysroot \
-        || (cat config.log && exit 1)
-RUN make --jobs $(nproc) all-gcc
-RUN make install-gcc
-RUN rm -v "/opt/gcc/${ARCH}/bin/"*{gcc,g++,cpp}
-ENV PATH="/var/buildlibs/gcc/bin:${PATH}"
-RUN make --jobs $(nproc)
-RUN make uninstall
-RUN make install all-target-libgcc
-RUN make install all-target-libgfortran
-RUN make install all-target-libstdc++-v3
-
-FROM gcc as gcc_pruned
-RUN --mount=source=prune_gcc.sh,target=/usr/bin/prune_gcc.sh prune_gcc.sh
-
-####################################################################################################
-# Extra libs
-####################################################################################################
-
-###################
-# RHEL ssl packages
-###################
-
-FROM --platform=linux/arm64 registry.access.redhat.com/ubi8 as rhel_image_base
-
-RUN dnf -y install openssl-devel cyrus-sasl-devel
-WORKDIR /var/builds/sysroot
-RUN mkdir -p usr/include
-RUN cp -R /usr/include/openssl usr/include
-RUN cp -R /usr/include/sasl usr/include
-RUN mkdir -p usr/lib64
-RUN cp -R /usr/lib64/.*ssl* usr/lib64
-RUN cp -R /usr/lib64/*ssl* usr/lib64
-RUN cp -R /usr/lib64/*sasl*.so* usr/lib64
-RUN cp -R /usr/lib64/sasl2 usr/lib64
-RUN cp -R /usr/lib64/*crypt* usr/lib64
-
 ####################################################################################################
 # Assemble final sysroots
 ####################################################################################################
 
-FROM build_image AS sysroot_base
+FROM build_image AS sysroot
 COPY --from=kernel /var/buildlibs/kernel /var/builds/sysroot
 COPY --from=glibc_pruned /var/buildlibs/glibc /var/builds/sysroot
-COPY --from=gcc_pruned /var/buildlibs/gcc /var/builds/sysroot/usr
-
-FROM build_image as sysroot_ssl
-COPY --from=sysroot_base /var/builds/sysroot /var/builds/sysroot
-COPY --from=rhel_image_base /var/builds/sysroot /var/builds/sysroot
