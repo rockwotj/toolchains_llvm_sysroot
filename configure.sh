@@ -27,9 +27,34 @@ if [[ "${ARCH}" == "aarch64" ]]; then
         --build=x86_64-linux-gnu
         --target="${target}"
     )
-    args+=(--host="${target}")
-    readonly toolchain_root="/opt/gcc/aarch64"
-    readonly toolchain_prefix="${toolchain_root}/bin/aarch64-linux"
+    if [[ "${IS_GCC_BUILD:-}" == "1" ]]; then
+        args+=(--host=x86_64-linux-gnu)
+        readonly toolchain_root="/opt/gcc/x86_64"
+        readonly toolchain_prefix="${toolchain_root}/bin/x86_64-linux"
+    else
+        args+=(--host="${target}")
+        readonly toolchain_root="/opt/gcc/aarch64"
+        readonly toolchain_prefix="${toolchain_root}/bin/aarch64-linux"
+    fi
+elif [[ "${ARCH}" == "armv7" ]]; then
+    readonly target="arm-linux-gnueabihf"
+    args+=(
+        --build=x86_64-linux-gnu
+        --target="${target}"
+        --with-arch=armv7-a
+        --with-fpu=vfpv3-d16
+        --with-float=hard
+        --with-mode=arm
+    )
+    if [[ "${IS_GCC_BUILD:-}" == "1" ]]; then
+        args+=(--host=x86_64-linux-gnu)
+        readonly toolchain_root="/opt/gcc/x86_64"
+        readonly toolchain_prefix="${toolchain_root}/bin/x86_64-linux"
+    else
+        args+=(--host="${target}")
+        readonly toolchain_root="/opt/gcc/armv7"
+        readonly toolchain_prefix="${toolchain_root}/bin/arm-linux-gnueabihf"
+    fi
 elif [[ "${ARCH}" == "x86_64" ]]; then
     readonly target="x86_64-linux"
     args+=(
